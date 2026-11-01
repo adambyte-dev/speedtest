@@ -94,7 +94,7 @@ export default function Home() {
       {/* Main Speed Test Dashboard - Tight & Compact Layout */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-3 sm:py-6 space-y-3 sm:space-y-3.5">
         {/* Top Header Ad Strip */}
-        <AdSlot variant="strip" slotId="home-top-strip" title="Ads Here · Slot Sponsor & Media Partner Tersedia" />
+        <AdSlot variant="strip" slotId="home-top-strip" />
 
         {/* Active & Best Provider Quick Bar */}
         <ActiveProviderBanner
@@ -153,7 +153,7 @@ export default function Home() {
             />
 
             {/* Compact Ad Slot below Gauge */}
-            <AdSlot variant="compact" slotId="gauge-bottom-ad" title="Ads Here · Space Iklan 300x50" className="mt-2" />
+            <AdSlot variant="compact" slotId="gauge-bottom-ad" className="mt-2" />
           </div>
 
           {/* Right Column (7 cols): Metrics Cards + Live Chart + Network Dock */}

@@ -279,7 +279,6 @@ function DetailedReportComponent({
           <AdSlot
             variant="strip"
             slotId="tab-route-strip"
-            title="Ads Here · Pasang Iklan Solusi CDN, VPN & Akselerator Rute Jaringan"
           />
         </TabsContent>
       </Tabs>

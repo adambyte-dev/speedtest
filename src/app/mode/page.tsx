@@ -115,7 +115,7 @@ export default function ConnectionModesPage() {
       </div>
 
       {/* Non-intrusive Ad Banner */}
-      <AdSlot variant="leaderboard" slotId="mode-mid-banner" title="Ads Here · Pasang Iklan Layanan Jaringan & Solusi Cloud" className="my-3" />
+      <AdSlot variant="leaderboard" slotId="mode-mid-banner" className="my-3" />
 
       {/* Comparison Matrix Table */}
       <div className="rounded-2xl border border-border/50 bg-card/60 dark:bg-zinc-900/40 backdrop-blur-md p-5 space-y-3">

@@ -189,6 +189,9 @@ export const TRANSLATIONS: Record<LanguageCode, Record<TranslationKey, string>> 
     input_domain_placeholder: "Masukkan domain atau IP (misal: google.com, 1.1.1.1)...",
     quick_examples: "Contoh cepat:",
     use_as_speedtest_server: "Jadikan Target Server Speed Test",
+    home: "Beranda",
+    back_to_speedtest: "Kembali ke Speed Test",
+    results_history_desc: "Daftar riwayat lengkap hasil pengujian kecepatan internet sebelumnya.",
   },
   en: {
     app_title: "Pingly Speed Test",
@@ -378,6 +381,9 @@ export const TRANSLATIONS: Record<LanguageCode, Record<TranslationKey, string>> 
     input_domain_placeholder: "Enter domain or IP (e.g. google.com, 1.1.1.1)...",
     quick_examples: "Quick examples:",
     use_as_speedtest_server: "Use as Speed Test Target Server",
+    home: "Home",
+    back_to_speedtest: "Back to Speed Test",
+    results_history_desc: "Complete history of previous internet speed test diagnostics.",
   },
   ja: {
     app_title: "Pingly スピードテスト",
@@ -567,6 +573,9 @@ export const TRANSLATIONS: Record<LanguageCode, Record<TranslationKey, string>> 
     input_domain_placeholder: "ドメインまたはIPを入力 (例: google.com, 1.1.1.1)...",
     quick_examples: "クイック入力:",
     use_as_speedtest_server: "このサーバーを速度測定対象にする",
+    home: "ホーム",
+    back_to_speedtest: "スピードテストに戻る",
+    results_history_desc: "過去のインターネット速度測定結果の完全な履歴一覧。",
   },
   zh: {
     app_title: "Pingly 网速测试",
@@ -756,6 +765,9 @@ export const TRANSLATIONS: Record<LanguageCode, Record<TranslationKey, string>> 
     input_domain_placeholder: "输入域名或IP地址 (例如: google.com, 1.1.1.1)...",
     quick_examples: "快捷示例:",
     use_as_speedtest_server: "设置为测速目标服务器",
+    home: "首页",
+    back_to_speedtest: "返回测速",
+    results_history_desc: "以往所有互联网连接速度与网络诊断的完整测试历史记录。",
   },
   es: {
     app_title: "Pingly Speed Test",
@@ -945,6 +957,9 @@ export const TRANSLATIONS: Record<LanguageCode, Record<TranslationKey, string>> 
     input_domain_placeholder: "Ingresa dominio o IP (ej. google.com, 1.1.1.1)...",
     quick_examples: "Ejemplos rápidos:",
     use_as_speedtest_server: "Usar como Servidor Objetivo de Velocidad",
+    home: "Inicio",
+    back_to_speedtest: "Volver al Test de Velocidad",
+    results_history_desc: "Historial completo de las pruebas de velocidad y diagnósticos anteriores.",
   },
   ar: {
     app_title: "Pingly لاختبار السرعة",
@@ -1134,5 +1149,8 @@ export const TRANSLATIONS: Record<LanguageCode, Record<TranslationKey, string>> 
     input_domain_placeholder: "أدخل النطاق أو عنوان الـ IP (مثل: google.com أو 1.1.1.1)...",
     quick_examples: "أمثلة سريعة:",
     use_as_speedtest_server: "تعيين كخادم مستهدف لاختبار السرعة",
+    home: "الرئيسية",
+    back_to_speedtest: "العودة إلى اختبار السرعة",
+    results_history_desc: "السجل الكامل لنتائج اختبارات سرعة الإنترنت والتشخيصات السابقة.",
   },
 };

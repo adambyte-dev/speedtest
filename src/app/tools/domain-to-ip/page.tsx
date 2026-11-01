@@ -343,8 +343,6 @@ export default function DomainToIpPage() {
       <AdSlot
         variant="leaderboard"
         slotId="domain-tool-mid-banner"
-        title="Ads Here · Pasang Iklan Layanan Domain, Hosting & Cloud VPS"
-        subtitle="Mulai dari Rp 50.000 / bulan · Jangkau audiens IT & Network Engineer"
         className="my-2"
       />
 

@@ -88,7 +88,7 @@ export default function CLIPage() {
       </div>
 
       {/* Non-intrusive Ad Banner */}
-      <AdSlot variant="leaderboard" slotId="cli-mid-banner" title="Ads Here · Pasang Iklan Cloud VPS, Server & Hosting Provider" className="my-3" />
+      <AdSlot variant="leaderboard" slotId="cli-mid-banner" className="my-3" />
 
       {/* Terminal Mockup Preview */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-950 text-zinc-100 overflow-hidden shadow-xl font-mono text-xs">

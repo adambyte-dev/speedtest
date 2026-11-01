@@ -41,6 +41,19 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: securityHeaders,
       },
+      {
+        source: "/api/speedtest/download",
+        headers: [
+          { key: "Content-Encoding", value: "identity" },
+          { key: "Cache-Control", value: "no-store, no-cache, no-transform, must-revalidate" },
+        ],
+      },
+      {
+        source: "/api/speedtest/upload",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, no-transform, must-revalidate" },
+        ],
+      },
     ];
   },
   turbopack: {

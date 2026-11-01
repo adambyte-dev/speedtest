@@ -49,7 +49,7 @@ export default function TermsOfServicePage() {
         </section>
 
         {/* Non-intrusive Ad Strip */}
-        <AdSlot variant="strip" slotId="terms-mid-ad" title="Ads Here · Pasang Iklan Layanan Hukum & Legal Tech" className="my-2" />
+        <AdSlot variant="strip" slotId="terms-mid-ad" className="my-2" />
 
         <section className="space-y-2 pt-4 border-t border-border/40">
           <h3 className="text-sm font-bold text-foreground flex items-center gap-2">

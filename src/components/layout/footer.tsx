@@ -261,7 +261,6 @@ function FooterComponent({ onOpenServers, onOpenResults, onOpenAbout }: FooterPr
         <AdSlot
           variant="strip"
           slotId="footer-sponsor-strip"
-          title="⚡ Verified Cloud Hosting, CDN & High-Speed Network Partners"
         />
       </div>
 

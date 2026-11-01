@@ -108,7 +108,7 @@ export default function FAQPage() {
       </div>
 
       {/* Non-intrusive Ad Strip */}
-      <AdSlot variant="strip" slotId="faq-search-strip" title="Ads Here · Pasang Iklan Produk Jaringan & Bantuan IT" className="my-3 max-w-xl mx-auto" />
+      <AdSlot variant="strip" slotId="faq-search-strip" className="my-3 max-w-xl mx-auto" />
 
       {/* Accordion Questions List */}
       <div className="space-y-3">

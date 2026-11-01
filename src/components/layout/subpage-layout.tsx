@@ -7,6 +7,7 @@ import { Footer } from "@/components/layout/footer";
 import { BackgroundWaves } from "@/components/layout/background-waves";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { ArrowLeft, ChevronRight, Home } from "lucide-react";
+import { useLanguage } from "@/context/language-context";
 
 interface SubpageLayoutProps {
   children: ReactNode;
@@ -21,6 +22,8 @@ export function SubpageLayout({
   subtitle,
   breadcrumbs = [],
 }: SubpageLayoutProps) {
+  const { t } = useLanguage();
+
   return (
     <div className="relative min-h-screen flex flex-col justify-between overflow-x-hidden font-sans selection:bg-[#800020]/15 selection:text-[#800020]">
       <BackgroundWaves />
@@ -42,7 +45,7 @@ export function SubpageLayout({
               className="flex items-center gap-1 hover:text-foreground transition-colors shrink-0"
             >
               <Home className="size-3.5" />
-              <span>Beranda</span>
+              <span>{t("home")}</span>
             </Link>
             <ChevronRight className="size-3 text-muted-foreground/60 shrink-0" />
             {breadcrumbs.map((b, i) => (
@@ -65,8 +68,8 @@ export function SubpageLayout({
           <Link
             href="/"
             className="inline-flex sm:hidden items-center justify-center size-7 rounded-full border border-border/60 hover:bg-muted text-foreground transition-all shrink-0"
-            aria-label="Kembali ke Speed Test"
-            title="Kembali ke Speed Test"
+            aria-label={t("back_to_speedtest")}
+            title={t("back_to_speedtest")}
           >
             <ArrowLeft className="size-3.5" />
           </Link>
@@ -75,14 +78,14 @@ export function SubpageLayout({
             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-border/60 hover:bg-muted text-foreground transition-all text-xs font-medium cursor-pointer shrink-0"
           >
             <ArrowLeft className="size-3" />
-            <span>Kembali ke Speed Test</span>
+            <span>{t("back_to_speedtest")}</span>
           </Link>
         </div>
 
         {/* Hero Title Section */}
         <div className="space-y-1.5 sm:space-y-2">
           {/* Top Non-intrusive Subpage Sponsor Strip */}
-          <AdSlot variant="strip" slotId="subpage-top-strip" title="Ads Here · Space Iklan & Kemitraan Digital" className="mb-2" />
+          <AdSlot variant="strip" slotId="subpage-top-strip" className="mb-2" />
 
           <h1 className="text-xl xs:text-2xl sm:text-4xl font-extrabold tracking-tight text-foreground leading-tight">
             {title}

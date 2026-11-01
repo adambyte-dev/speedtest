@@ -66,7 +66,6 @@ export default function SecurityStandardsPage() {
       <AdSlot
         variant="leaderboard"
         slotId="security-mid-banner"
-        title="Ads Here · Pasang Iklan Solusi Keamanan Siber & Cloud Server"
         className="my-1"
       />
 

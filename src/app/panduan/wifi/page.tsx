@@ -118,7 +118,7 @@ export default function WifiOptimizationGuidePage() {
       </div>
 
       {/* Non-intrusive Ad Banner */}
-      <AdSlot variant="leaderboard" slotId="wifi-mid-banner" title="Ads Here · Pasang Promosi Perangkat Router & Wi-Fi Mesh" className="my-3" />
+      <AdSlot variant="leaderboard" slotId="wifi-mid-banner" className="my-3" />
 
       {/* Actionable Steps Grid */}
       <div className="space-y-4">

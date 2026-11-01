@@ -163,7 +163,7 @@ export default function MbpsVsMBytePage() {
       </div>
 
       {/* Non-intrusive Ad Banner */}
-      <AdSlot variant="leaderboard" slotId="mbps-calc-bottom-ad" title="Ads Here · Pasang Banner Promosi Provider / Hosting Anda" className="my-2" />
+      <AdSlot variant="leaderboard" slotId="mbps-calc-bottom-ad" className="my-2" />
 
       {/* Explanation Cards: 8 Bits = 1 Byte */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -199,7 +199,7 @@ export default function MbpsVsMBytePage() {
       </div>
 
       {/* Non-intrusive Ad Strip */}
-      <AdSlot variant="strip" slotId="mbps-table-top-ad" title="Ads Here · Promosikan Layanan Jaringan, Wi-Fi & VPN Anda" className="my-2" />
+      <AdSlot variant="strip" slotId="mbps-table-top-ad" className="my-2" />
 
       {/* Reference Table */}
       <div className="rounded-2xl border border-border/50 bg-card/60 dark:bg-zinc-900/40 backdrop-blur-md p-5 space-y-3">

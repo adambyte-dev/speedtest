@@ -203,4 +203,7 @@ export type TranslationKey =
   | "domain_to_ip_desc"
   | "input_domain_placeholder"
   | "quick_examples"
-  | "use_as_speedtest_server";
+  | "use_as_speedtest_server"
+  | "home"
+  | "back_to_speedtest"
+  | "results_history_desc";

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 
-// Pre-allocated reusable random payload block (64 KB)
-const BLOCK_SIZE = 64 * 1024;
-const CHUNK_BLOCK = Buffer.alloc(BLOCK_SIZE, 0xa5);
+// High-entropy 2 MB random binary pool to guarantee 100% UNCOMPRESSIBLE data
+// This ensures that Brotli, Gzip, or any CDN compression CANNOT shrink the payload,
+// giving 100% true, accurate physical wire-speed measurement.
+const POOL_SIZE = 2 * 1024 * 1024; // 2 MB
+const RANDOM_POOL = crypto.randomBytes(POOL_SIZE);
+const BLOCK_SIZE = 64 * 1024; // 64 KB chunks
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -23,8 +27,10 @@ export async function GET(request: Request) {
     }
   }
 
-  // Stream bytes in 64 KB chunks
   let bytesRemaining = totalBytes;
+  let poolOffset = 0;
+
+  // Stream raw uncompressible bytes in 64 KB chunks
   const stream = new ReadableStream({
     pull(controller) {
       if (bytesRemaining <= 0) {
@@ -32,7 +38,21 @@ export async function GET(request: Request) {
         return;
       }
       const chunkSize = Math.min(bytesRemaining, BLOCK_SIZE);
-      const chunk = chunkSize === BLOCK_SIZE ? CHUNK_BLOCK : CHUNK_BLOCK.subarray(0, chunkSize);
+      // Slice rotating window from the high-entropy pool
+      const endOffset = poolOffset + chunkSize;
+      let chunk: Buffer;
+      if (endOffset <= POOL_SIZE) {
+        chunk = RANDOM_POOL.subarray(poolOffset, endOffset);
+        poolOffset = endOffset % POOL_SIZE;
+      } else {
+        // Wrap around pool
+        chunk = Buffer.concat([
+          RANDOM_POOL.subarray(poolOffset, POOL_SIZE),
+          RANDOM_POOL.subarray(0, endOffset % POOL_SIZE),
+        ]);
+        poolOffset = endOffset % POOL_SIZE;
+      }
+
       controller.enqueue(chunk);
       bytesRemaining -= chunkSize;
     },
@@ -43,9 +63,10 @@ export async function GET(request: Request) {
     headers: {
       "Content-Type": "application/octet-stream",
       "Content-Length": totalBytes.toString(),
-      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-      Pragma: "no-cache",
-      Expires: "0",
+      "Content-Encoding": "identity",
+      "Cache-Control": "no-store, no-cache, no-transform, must-revalidate, max-age=0",
+      "Pragma": "no-cache",
+      "Expires": "0",
     },
   });
 }

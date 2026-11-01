@@ -40,7 +40,7 @@ export function ResultsModal({
               <div>
                 <DialogTitle className="text-base sm:text-lg">{t("results")}</DialogTitle>
                 <DialogDescription className="text-xs">
-                  Daftar hasil pengujian kecepatan internet sebelumnya.
+                  {t("results_history_desc")}
                 </DialogDescription>
               </div>
             </div>
@@ -138,7 +138,7 @@ export function ResultsModal({
         </div>
 
         {/* Modal Bottom Ad Slot */}
-        <AdSlot variant="compact" slotId="modal-results-ad" title="Ads Here · Pasang Iklan di Riwayat Pengujian" className="mt-2 shrink-0" />
+        <AdSlot variant="compact" slotId="modal-results-ad" className="mt-2 shrink-0" />
       </DialogContent>
     </Dialog>
   );

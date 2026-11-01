@@ -9,7 +9,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const startTime = Date.now();
+  const startTime = performance.now();
   let bytesReceived = 0;
 
   try {
@@ -27,17 +27,24 @@ export async function POST(request: Request) {
       bytesReceived = blob.byteLength;
     }
 
-    const durationMs = Math.max(Date.now() - startTime, 1);
+    const durationMs = Math.max(performance.now() - startTime, 1);
     const durationSec = durationMs / 1000;
     const megabits = (bytesReceived * 8) / (1000 * 1000);
     const speedMbps = Math.round((megabits / durationSec) * 10) / 10;
 
-    return NextResponse.json({
-      success: true,
-      bytesReceived,
-      durationMs,
-      speedMbps,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        bytesReceived,
+        durationMs: Math.round(durationMs * 10) / 10,
+        speedMbps,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, no-transform, must-revalidate",
+        },
+      }
+    );
   } catch {
     return NextResponse.json(
       {

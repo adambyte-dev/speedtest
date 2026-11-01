@@ -60,10 +60,10 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
               </div>
             </div>
             <p className="text-[11px] text-foreground/80 leading-normal">
-              Pengembang & Perancang Sistem Pingly Speed Test.
+              Siswa Teknik Jaringan Komputer dan Telekomunikasi (TJKT) di SMK Negeri 1 Majalengka.
             </p>
             <blockquote className="text-[11px] italic text-muted-foreground border-l-2 border-[#800020] pl-2.5 my-2">
-              &quot;Membangun sistem pengukuran jaringan yang handal bukan hanya tentang baris kode yang ditulis, melainkan bagaimana telemetri disajikan secara akurat, transparan, aman, dan tanpa manipulasi.&quot;
+              &quot;Membangun sistem yang handal bukan hanya tentang baris kode yang ditulis, melainkan tentang bagaimana setiap subsistem bekerja selaras untuk memecahkan masalah nyata secara aman, transparan, dan terukur.&quot;
             </blockquote>
 
             <div className="pt-2 border-t border-border/50 flex flex-col gap-1.5 text-[11px]">
@@ -95,14 +95,16 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
           <div className="p-3.5 rounded-xl bg-muted/20 border border-border/40 space-y-1.5 text-[11px]">
             <div className="font-bold text-foreground flex items-center gap-1.5">
               <ShieldCheck className="size-3.5 text-[#800020] dark:text-rose-400" />
-              <span>Lisensi & Transparansi Data</span>
+              <span>📄 Lisensi, Hak Cipta, & Disclaimer</span>
             </div>
             <p>
-              Proyek ini dilisensikan di bawah <strong>MIT License</strong>. Hak Cipta Desain Sistem &
-              Spesifikasi © 2026 Pingly Technologies.
+              Proyek ini dilisensikan di bawah <strong>MIT License</strong>.
+            </p>
+            <p className="font-medium text-foreground">
+              Hak Cipta Desain Sistem & Spesifikasi © 2026 Tim Pengembang Sistem Informasi Sekolah — SMKN 1 Majalengka.
             </p>
             <p className="text-muted-foreground/80 italic text-[10px]">
-              Disclaimer: Platform ini menyediakan telemetri kecepatan internet riil berbasis WebSockets dan Fetch stream langsung ke node edge terdekat tanpa rekayasa artifisial atau manipulasi hasil.
+              Disclaimer: Sistem ini dibangun untuk mendukung transparansi dan efisiensi manajemen sarana prasarana sekolah secara digital. Segala bentuk implementasi pada skala produksi wajib mengikuti regulasi pengadaan barang dan jasa instansi terkait.
             </p>
           </div>
 
@@ -110,8 +112,6 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
           <AdSlot
             variant="compact"
             slotId="modal-about-ad"
-            title="Ads Here · Sponsor Proyek Open-Source"
-            subtitle="Dukung infrastruktur server pengujian & riset telekomunikasi Pingly"
             className="pt-1"
           />
         </div>

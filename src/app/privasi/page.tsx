@@ -62,7 +62,7 @@ export default function PrivacyPolicyPage() {
       </div>
 
       {/* Non-intrusive Ad Banner */}
-      <AdSlot variant="leaderboard" slotId="privacy-mid-banner" title="Ads Here · Pasang Iklan Layanan VPN, Privacy & Keamanan Data" className="my-2" />
+      <AdSlot variant="leaderboard" slotId="privacy-mid-banner" className="my-2" />
 
       {/* Detailed Legal Clauses */}
       <div className="p-6 rounded-2xl border border-border/50 bg-card/60 dark:bg-zinc-900/40 backdrop-blur-md space-y-4 text-xs text-muted-foreground leading-relaxed">

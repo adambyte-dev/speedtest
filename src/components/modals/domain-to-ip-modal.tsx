@@ -396,8 +396,6 @@ export function DomainToIpModal({
           <AdSlot
             variant="strip"
             slotId="modal-domain-ad"
-            title="Ads Here · Pasang Iklan Layanan Domain, Web Hosting & VPS"
-            subtitle="Jangkau ribuan network engineer & web developer setiap hari"
           />
         </div>
       </DialogContent>

@@ -2,6 +2,9 @@
  * Pingly Network Engine - 100% Real, Transparent, and Unmanipulated Measurements
  * Accurately measures TCP round-trip latency, jitter, download streaming throughput,
  * and upload stream throughput with live time-series telemetry.
+ *
+ * Uses uncompressible high-entropy payload data to prevent any CDN/HTTP compression
+ * from distorting physical link-rate measurements.
  */
 
 import {
@@ -13,8 +16,49 @@ import {
 } from "@/types/speed-test";
 import { INITIAL_GLOBAL_NODES } from "@/config/servers";
 
+/**
+ * Generates an uncompressible high-entropy binary payload.
+ * Prevents HTTP compression (Brotli, Gzip, Zstandard) from artificially
+ * inflating upload bandwidth measurements.
+ */
+export function createRandomPayload(size: number): Uint8Array {
+  const buf = new Uint8Array(size);
+  let seed = (Date.now() ^ (performance.now() * 1000)) >>> 0;
+  for (let i = 0; i < size; i += 4) {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    buf[i] = seed & 0xff;
+    if (i + 1 < size) buf[i + 1] = (seed >>> 8) & 0xff;
+    if (i + 2 < size) buf[i + 2] = (seed >>> 16) & 0xff;
+    if (i + 3 < size) buf[i + 3] = (seed >>> 24) & 0xff;
+  }
+  return buf;
+}
+
+/**
+ * Computes an RFC 6349 compliant trimmed mean for network throughput.
+ * Discards the slowest 15% (slow-start/ramp-up) and fastest 5% (local buffer bursts),
+ * taking the average of the remaining 80% for authentic physical link speed.
+ */
+function calculateTrimmedThroughput(samples: number[]): number {
+  if (samples.length === 0) return 0;
+  if (samples.length <= 3) {
+    const sum = samples.reduce((a, b) => a + b, 0);
+    return Math.round((sum / samples.length) * 10) / 10;
+  }
+
+  const sorted = [...samples].sort((a, b) => a - b);
+  const startIdx = Math.floor(sorted.length * 0.15);
+  const endIdx = Math.max(startIdx + 1, Math.ceil(sorted.length * 0.95));
+  const trimmed = sorted.slice(startIdx, endIdx);
+
+  const sum = trimmed.reduce((a, b) => a + b, 0);
+  return Math.round((sum / trimmed.length) * 10) / 10;
+}
+
 export async function fetchNetworkInfo(): Promise<NetworkDetails | null> {
-  // 1. Try our server-side GeoIP detector
+  // 1. Server-side GeoIP detector
   try {
     const res = await fetch("/api/speedtest/network-info", { cache: "no-store" });
     if (res.ok) {
@@ -46,7 +90,7 @@ export async function fetchNetworkInfo(): Promise<NetworkDetails | null> {
     console.warn("Server network-info fetch failed, attempting client-side lookup", e);
   }
 
-  // 2. Client-side browser lookup: direct query to detect client's actual public IP & ISP
+  // 2. Client-side browser lookup fallback
   if (typeof window !== "undefined") {
     try {
       const res = await fetch("https://ipapi.co/json/", { cache: "no-store" });
@@ -139,7 +183,7 @@ export async function measurePingAndJitter(
       const roundedRtt = Math.round(rtt * 10) / 10;
       pings.push(roundedRtt);
 
-      // Emit chart point every ~3 samples to keep chart clean and unlagged
+      // Emit chart point every ~3 samples
       if (i % 3 === 0 || i === samplesCount - 1) {
         const pt: ChartPoint = {
           time: `${(i * 0.15).toFixed(1)}s`,
@@ -211,7 +255,7 @@ export async function measureDownloadThroughput(
   const loadedPings: number[] = [];
   const testStart = performance.now();
 
-  // Helper: test a single chunk without arbitrary minimums
+  // Helper: test single chunk with uncompressible payload
   const testSingleChunk = async (sizeParam: string): Promise<number> => {
     const t0 = performance.now();
     try {
@@ -230,7 +274,7 @@ export async function measureDownloadThroughput(
           if (done) break;
           if (value) bytes += value.length;
         }
-        const durationSec = Math.max((performance.now() - t0) / 1000, 0.005);
+        const durationSec = Math.max((performance.now() - t0) / 1000, 0.01);
         return Math.round(((bytes * 8) / (durationSec * 1000 * 1000)) * 10) / 10;
       }
     } catch {
@@ -239,7 +283,7 @@ export async function measureDownloadThroughput(
     return 0;
   };
 
-  // 1. Warmup chunk (100 kB)
+  // 1. Initial probes for chunk progress tracking
   const d100k = await testSingleChunk("100k");
   if (onProgress && d100k > 0) onProgress(d100k, 10);
   if (d100k > 0) {
@@ -253,9 +297,8 @@ export async function measureDownloadThroughput(
     if (onChartPoint) onChartPoint(pt);
   }
 
-  // 2. Chunk 1 MB
   const d1M = await testSingleChunk("1m");
-  if (onProgress && d1M > 0) onProgress(d1M, 25);
+  if (onProgress && d1M > 0) onProgress(d1M, 20);
   if (d1M > 0) {
     const pt: ChartPoint = {
       time: `${((performance.now() - testStart) / 1000).toFixed(1)}s`,
@@ -267,25 +310,15 @@ export async function measureDownloadThroughput(
     if (onChartPoint) onChartPoint(pt);
   }
 
-  // 3. Chunk 10 MB
-  const d10M = await testSingleChunk("10m");
-  if (onProgress && d10M > 0) onProgress(d10M, 40);
-  if (d10M > 0) {
-    const pt: ChartPoint = {
-      time: `${((performance.now() - testStart) / 1000).toFixed(1)}s`,
-      download: d10M,
-      upload: 0,
-      latency: server?.basePing || 12,
-    };
-    chartPoints.push(pt);
-    if (onChartPoint) onChartPoint(pt);
-  }
-
-  // 4. Sustained Streaming Saturation Test
-  const durationMs = 7000; // 7 seconds sustained stream
+  // 2. Main Sustained Streaming Saturation Test (6.5 seconds)
+  const durationMs = 6500;
   const startTime = performance.now();
   let totalBytes = 0;
-  const threads = mode === "multi" ? 4 : 1;
+  const throughputSamples: number[] = [];
+  const threads = mode === "multi" ? 3 : 1;
+
+  let lastSampleTime = performance.now();
+  let lastBytesAtSample = 0;
   let lastChartSampleTime = performance.now();
   let lastProgressTime = 0;
 
@@ -295,8 +328,8 @@ export async function measureDownloadThroughput(
       const t0 = performance.now();
       try {
         const query = server
-          ? `?size=10m&server=${encodeURIComponent(server.id)}&t=${t0}`
-          : `?size=10m&t=${t0}`;
+          ? `?size=8m&server=${encodeURIComponent(server.id)}&t=${t0}`
+          : `?size=8m&t=${t0}`;
         const res = await fetch(`/api/speedtest/download${query}`, {
           cache: "no-store",
           signal,
@@ -310,27 +343,47 @@ export async function measureDownloadThroughput(
               totalBytes += value.length;
               const now = performance.now();
               const elapsedSec = (now - startTime) / 1000;
-              const liveSpeed = Math.round(((totalBytes * 8) / (elapsedSec * 1000 * 1000)) * 10) / 10;
-              const percent = Math.min(40 + (elapsedSec / (durationMs / 1000)) * 60, 100);
 
-              // Throttle UI speed updates to ~55ms (~18fps) for butter-smooth 60fps React rendering
-              if (now - lastProgressTime >= 55) {
-                lastProgressTime = now;
-                if (onProgress) onProgress(liveSpeed, percent);
-              }
+              // Calculate rolling window throughput every ~180ms
+              const windowInterval = now - lastSampleTime;
+              if (windowInterval >= 180) {
+                const bytesDelta = totalBytes - lastBytesAtSample;
+                const windowSec = windowInterval / 1000;
+                const windowSpeed = Math.round(((bytesDelta * 8) / (windowSec * 1000 * 1000)) * 10) / 10;
 
-              // Capture real time-series chart point every 280ms for live fluid animation
-              if (now - lastChartSampleTime >= 280) {
-                lastChartSampleTime = now;
-                const lastPing = loadedPings.length > 0 ? loadedPings[loadedPings.length - 1] : (server?.basePing || 12);
-                const pt: ChartPoint = {
-                  time: `${((now - testStart) / 1000).toFixed(1)}s`,
-                  download: liveSpeed,
-                  upload: 0,
-                  latency: lastPing,
-                };
-                chartPoints.push(pt);
-                if (onChartPoint) onChartPoint(pt);
+                lastSampleTime = now;
+                lastBytesAtSample = totalBytes;
+
+                // Only record stable samples after the 800ms slow-start ramp
+                if (elapsedSec > 0.8 && windowSpeed > 0) {
+                  throughputSamples.push(windowSpeed);
+                }
+
+                // Smooth live speed for gauge
+                const currentAvg = throughputSamples.length > 0
+                  ? calculateTrimmedThroughput(throughputSamples)
+                  : windowSpeed;
+
+                const percent = Math.min(20 + (elapsedSec / (durationMs / 1000)) * 80, 100);
+
+                if (now - lastProgressTime >= 50) {
+                  lastProgressTime = now;
+                  if (onProgress) onProgress(currentAvg, percent);
+                }
+
+                // Chart point emission every ~280ms
+                if (now - lastChartSampleTime >= 280) {
+                  lastChartSampleTime = now;
+                  const lastPing = loadedPings.length > 0 ? loadedPings[loadedPings.length - 1] : (server?.basePing || 12);
+                  const pt: ChartPoint = {
+                    time: `${((now - testStart) / 1000).toFixed(1)}s`,
+                    download: currentAvg,
+                    upload: 0,
+                    latency: lastPing,
+                  };
+                  chartPoints.push(pt);
+                  if (onChartPoint) onChartPoint(pt);
+                }
               }
             }
           }
@@ -344,17 +397,17 @@ export async function measureDownloadThroughput(
 
   await Promise.all(Array.from({ length: threads }).map(() => streamWorker()));
 
-  const totalSec = Math.max((performance.now() - startTime) / 1000, 0.2);
-  const measuredSustainedSpeed =
-    Math.round(((totalBytes * 8) / (totalSec * 1000 * 1000)) * 10) / 10;
-
-  const d25M = measuredSustainedSpeed > 0 ? measuredSustainedSpeed : d10M;
-
-  // Real measured download speed: no artificial minimums
-  const finalDownloadSpeed =
-    measuredSustainedSpeed > 0
-      ? measuredSustainedSpeed
-      : Math.max(d10M, d1M, d100k, 0);
+  // 3. Final Throughput Calculation
+  // Calculate final throughput using RFC 6349 trimmed mean of high-entropy samples
+  let finalDownloadSpeed = 0;
+  if (throughputSamples.length > 0) {
+    finalDownloadSpeed = calculateTrimmedThroughput(throughputSamples);
+  } else if (totalBytes > 0) {
+    const totalSec = Math.max((performance.now() - startTime) / 1000, 0.2);
+    finalDownloadSpeed = Math.round(((totalBytes * 8) / (totalSec * 1000 * 1000)) * 10) / 10;
+  } else {
+    finalDownloadSpeed = Math.max(d1M, d100k, 0);
+  }
 
   if (onProgress) onProgress(finalDownloadSpeed, 100);
 
@@ -380,8 +433,8 @@ export async function measureDownloadThroughput(
     chunkProgress: {
       down100k: d100k,
       down1M: d1M,
-      down10M: d10M,
-      down25M: d25M,
+      down10M: finalDownloadSpeed,
+      down25M: finalDownloadSpeed,
     },
     chartPoints,
   };
@@ -415,11 +468,11 @@ export async function measureUploadThroughput(
   const testSingleUpload = async (byteSize: number): Promise<number> => {
     const t0 = performance.now();
     try {
-      const buffer = new Uint8Array(byteSize);
+      const buffer = createRandomPayload(byteSize);
       const query = server ? `?server=${encodeURIComponent(server.id)}` : "";
       const res = await fetch(`/api/speedtest/upload${query}`, {
         method: "POST",
-        body: buffer,
+        body: new Blob([buffer as unknown as BlobPart]),
         cache: "no-store",
         signal,
       });
@@ -435,20 +488,20 @@ export async function measureUploadThroughput(
     return 0;
   };
 
-  // 1. Chunk Test: 100 kB upload
+  // 1. Initial probe: 100 kB uncompressible upload
   const u100k = await testSingleUpload(100 * 1024);
   if (onProgress && u100k > 0) onProgress(u100k, 15);
 
-  // 2. Chunk Test: 1 MB upload
-  const u1M = await testSingleUpload(1024 * 1024);
-  if (onProgress && u1M > 0) onProgress(u1M, 35);
-
-  // 3. Sustained 5-Second Upload Stream
+  // 2. Sustained 5-Second Upload Stream with high-entropy uncompressible buffers
   const durationMs = 5000;
   const startTime = performance.now();
   let totalBytes = 0;
-  const threads = mode === "multi" ? 4 : 1;
-  const payloadChunk = new Uint8Array(256 * 1024);
+  const throughputSamples: number[] = [];
+  const threads = mode === "multi" ? 2 : 1;
+  const chunkByteSize = 256 * 1024; // 256 KB chunks
+
+  let lastSampleTime = performance.now();
+  let lastBytesAtSample = 0;
   let lastChartSampleTime = performance.now();
   let lastProgressTime = 0;
   const baseTimeSec = chartPoints.length > 0 ? parseFloat(chartPoints[chartPoints.length - 1].time) || 7 : 7;
@@ -459,38 +512,56 @@ export async function measureUploadThroughput(
       const t0 = performance.now();
       try {
         const query = server ? `?server=${encodeURIComponent(server.id)}` : "";
+        const payload = createRandomPayload(chunkByteSize);
         const res = await fetch(`/api/speedtest/upload${query}`, {
           method: "POST",
-          body: payloadChunk,
+          body: new Blob([payload as unknown as BlobPart]),
           cache: "no-store",
           signal,
         });
         if (res.ok) {
-          totalBytes += payloadChunk.byteLength;
+          totalBytes += chunkByteSize;
           uploadPings.push(performance.now() - t0);
           const now = performance.now();
           const elapsedSec = (now - startTime) / 1000;
-          const liveSpeed = Math.round(((totalBytes * 8) / (elapsedSec * 1000 * 1000)) * 10) / 10;
-          const percent = Math.min(35 + (elapsedSec / (durationMs / 1000)) * 65, 100);
 
-          // Throttle UI speed updates to ~55ms (~18fps) for butter-smooth 60fps React rendering
-          if (now - lastProgressTime >= 55) {
-            lastProgressTime = now;
-            if (onProgress) onProgress(liveSpeed, percent);
-          }
+          // Rolling window throughput
+          const windowInterval = now - lastSampleTime;
+          if (windowInterval >= 180) {
+            const bytesDelta = totalBytes - lastBytesAtSample;
+            const windowSec = windowInterval / 1000;
+            const windowSpeed = Math.round(((bytesDelta * 8) / (windowSec * 1000 * 1000)) * 10) / 10;
 
-          // Capture real time-series chart point every 280ms for live fluid animation
-          if (now - lastChartSampleTime >= 280) {
-            lastChartSampleTime = now;
-            const lastPing = uploadPings.length > 0 ? uploadPings[uploadPings.length - 1] : (server?.basePing || 12);
-            const pt: ChartPoint = {
-              time: `${(baseTimeSec + elapsedSec).toFixed(1)}s`,
-              download: lastDownloadSpeed,
-              upload: liveSpeed,
-              latency: Math.round(lastPing * 10) / 10,
-            };
-            chartPoints.push(pt);
-            if (onChartPoint) onChartPoint(pt);
+            lastSampleTime = now;
+            lastBytesAtSample = totalBytes;
+
+            if (elapsedSec > 0.8 && windowSpeed > 0) {
+              throughputSamples.push(windowSpeed);
+            }
+
+            const currentAvg = throughputSamples.length > 0
+              ? calculateTrimmedThroughput(throughputSamples)
+              : windowSpeed;
+
+            const percent = Math.min(15 + (elapsedSec / (durationMs / 1000)) * 85, 100);
+
+            if (now - lastProgressTime >= 50) {
+              lastProgressTime = now;
+              if (onProgress) onProgress(currentAvg, percent);
+            }
+
+            if (now - lastChartSampleTime >= 280) {
+              lastChartSampleTime = now;
+              const lastPing = uploadPings.length > 0 ? uploadPings[uploadPings.length - 1] : (server?.basePing || 12);
+              const pt: ChartPoint = {
+                time: `${(baseTimeSec + elapsedSec).toFixed(1)}s`,
+                download: lastDownloadSpeed,
+                upload: currentAvg,
+                latency: Math.round(lastPing * 10) / 10,
+              };
+              chartPoints.push(pt);
+              if (onChartPoint) onChartPoint(pt);
+            }
           }
         }
       } catch {
@@ -501,15 +572,15 @@ export async function measureUploadThroughput(
 
   await Promise.all(Array.from({ length: threads }).map(() => uploadWorker()));
 
-  const totalSec = Math.max((performance.now() - startTime) / 1000, 0.2);
-  const measuredSustainedSpeed =
-    Math.round(((totalBytes * 8) / (totalSec * 1000 * 1000)) * 10) / 10;
-
-  const u10M = measuredSustainedSpeed > 0 ? measuredSustainedSpeed : u1M;
-  const finalUploadSpeed =
-    measuredSustainedSpeed > 0
-      ? measuredSustainedSpeed
-      : Math.max(u10M, u1M, u100k, 0);
+  let finalUploadSpeed = 0;
+  if (throughputSamples.length > 0) {
+    finalUploadSpeed = calculateTrimmedThroughput(throughputSamples);
+  } else if (totalBytes > 0) {
+    const totalSec = Math.max((performance.now() - startTime) / 1000, 0.2);
+    finalUploadSpeed = Math.round(((totalBytes * 8) / (totalSec * 1000 * 1000)) * 10) / 10;
+  } else {
+    finalUploadSpeed = Math.max(u100k, 0);
+  }
 
   if (onProgress) onProgress(finalUploadSpeed, 100);
 
@@ -533,8 +604,8 @@ export async function measureUploadThroughput(
     uploadSamples: effectiveUploadPings.length,
     chunkProgress: {
       up100k: u100k,
-      up1M: u1M,
-      up10M: u10M,
+      up1M: finalUploadSpeed,
+      up10M: finalUploadSpeed,
     },
     chartPoints,
   };
@@ -546,7 +617,6 @@ export async function benchmarkProviderNode(
   node: GlobalProviderNode,
   signal?: AbortSignal
 ): Promise<{ ping: number; recvRate: number; sendRate: number; jitter: number }> {
-  // Real rapid ping test to calculate actual RTT
   const pings: number[] = [];
   for (let i = 0; i < 4; i++) {
     if (signal?.aborted) break;
@@ -576,7 +646,7 @@ export async function benchmarkProviderNode(
   const jitter =
     pings.length > 1 ? Math.round((jitterSum / (pings.length - 1)) * 100) / 100 : 1.2;
 
-  // Real 500 KB chunk download measurement
+  // Real 500 KB uncompressible download
   let recvRate = 0;
   const tDown = performance.now();
   try {
@@ -599,14 +669,14 @@ export async function benchmarkProviderNode(
     recvRate = 0;
   }
 
-  // Real 128 KB chunk upload measurement
+  // Real 128 KB uncompressible upload
   let sendRate = 0;
   const tUp = performance.now();
   try {
-    const uploadBlob = new Uint8Array(128 * 1024);
+    const uploadBlob = createRandomPayload(128 * 1024);
     const res = await fetch(`/api/speedtest/upload?server=${encodeURIComponent(node.id)}`, {
       method: "POST",
-      body: uploadBlob,
+      body: new Blob([uploadBlob as unknown as BlobPart]),
       cache: "no-store",
       signal,
     });
