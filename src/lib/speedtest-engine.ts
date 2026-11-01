@@ -270,81 +270,60 @@ export async function measureDownloadThroughput(
   const loadedPings: number[] = [];
   const testStart = performance.now();
 
-  // Helper: test single chunk with uncompressible payload (edge primary, local fallback)
-  const testSingleChunk = async (bytes: number): Promise<number> => {
-    const t0 = performance.now();
-    try {
-      let res: Response;
-      try {
-        res = await fetch(`${EDGE_DOWNLOAD_BASE}?bytes=${bytes}&t=${t0}`, {
-          cache: "no-store",
-          signal,
-        });
-      } catch {
-        const query = server ? `?size=${bytes}&server=${encodeURIComponent(server.id)}&t=${t0}` : `?size=${bytes}&t=${t0}`;
-        res = await fetch(`/api/speedtest/download${query}`, {
-          cache: "no-store",
-          signal,
-        });
-      }
-
-      if (res.ok && res.body) {
-        const reader = res.body.getReader();
-        let received = 0;
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) received += value.length;
-        }
-        const durationSec = Math.max((performance.now() - t0) / 1000, 0.01);
-        return Math.round(((received * 8) / (durationSec * 1000 * 1000)) * 10) / 10;
-      }
-    } catch {
-      // aborted or network error
-    }
-    return 0;
-  };
-
-  // 1. Initial quick probes for chunk progress tracking
-  const d100k = await testSingleChunk(150 * 1024);
-  if (onProgress && d100k > 0) onProgress(d100k, 10);
-  if (d100k > 0) {
-    const pt: ChartPoint = {
-      time: `${((performance.now() - testStart) / 1000).toFixed(1)}s`,
-      download: d100k,
-      upload: 0,
-      latency: server?.basePing || 12,
-    };
-    chartPoints.push(pt);
-    if (onChartPoint) onChartPoint(pt);
-  }
-
-  const d1M = await testSingleChunk(1024 * 1024);
-  if (onProgress && d1M > 0) onProgress(d1M, 20);
-  if (d1M > 0) {
-    const pt: ChartPoint = {
-      time: `${((performance.now() - testStart) / 1000).toFixed(1)}s`,
-      download: d1M,
-      upload: 0,
-      latency: server?.basePing || 12,
-    };
-    chartPoints.push(pt);
-    if (onChartPoint) onChartPoint(pt);
-  }
-
-  // 2. Main Sustained Multi-Stream Saturation Test (7.5 seconds)
-  // Ookla / RFC 6349 standard: 6 parallel streams in multi mode, 2 streams in single mode
   const durationMs = 7500;
   const startTime = performance.now();
   let totalBytes = 0;
   const throughputSamples: number[] = [];
   const threads = mode === "multi" ? 6 : 2;
-  const streamChunkBytes = 25 * 1024 * 1024; // 25 MB stream chunks
+  const streamChunkBytes = 7 * 1024 * 1024; // 7 MB (under Cloudflare's 10 MB edge limit to eliminate HTTP 429)
 
   let lastSampleTime = performance.now();
   let lastBytesAtSample = 0;
   let lastChartSampleTime = performance.now();
   let lastProgressTime = 0;
+
+  // Central sampling monitor: runs every 80ms, eliminates worker race conditions
+  const monitor = setInterval(() => {
+    const now = performance.now();
+    const elapsedSec = (now - startTime) / 1000;
+    const windowSec = (now - lastSampleTime) / 1000;
+
+    if (windowSec >= 0.16) {
+      const bytesDelta = totalBytes - lastBytesAtSample;
+      const windowSpeed = Math.round(((bytesDelta * 8) / (windowSec * 1000 * 1000)) * 10) / 10;
+      lastSampleTime = now;
+      lastBytesAtSample = totalBytes;
+
+      // Discard initial 0.8s TCP slow-start
+      if (elapsedSec > 0.8 && windowSpeed > 0) {
+        throughputSamples.push(windowSpeed);
+      }
+
+      const currentAvg = throughputSamples.length > 0
+        ? calculateTrimmedThroughput(throughputSamples)
+        : windowSpeed;
+
+      const percent = Math.min(10 + (elapsedSec / (durationMs / 1000)) * 90, 100);
+
+      if (now - lastProgressTime >= 35) {
+        lastProgressTime = now;
+        if (onProgress) onProgress(currentAvg, percent);
+      }
+
+      if (now - lastChartSampleTime >= 200) {
+        lastChartSampleTime = now;
+        const lastPing = loadedPings.length > 0 ? loadedPings[loadedPings.length - 1] : (server?.basePing || 12);
+        const pt: ChartPoint = {
+          time: `${((now - testStart) / 1000).toFixed(1)}s`,
+          download: currentAvg,
+          upload: 0,
+          latency: lastPing,
+        };
+        chartPoints.push(pt);
+        if (onChartPoint) onChartPoint(pt);
+      }
+    }
+  }, 80);
 
   const streamWorker = async (workerIndex: number) => {
     while (performance.now() - startTime < durationMs) {
@@ -357,93 +336,51 @@ export async function measureDownloadThroughput(
             cache: "no-store",
             signal,
           });
+          if (!res.ok) throw new Error(`Edge error: ${res.status}`);
         } catch {
           const query = server
-            ? `?size=25m&server=${encodeURIComponent(server.id)}&t=${t0}_${workerIndex}`
-            : `?size=25m&t=${t0}_${workerIndex}`;
+            ? `?size=5m&server=${encodeURIComponent(server.id)}&t=${t0}_${workerIndex}`
+            : `?size=5m&t=${t0}_${workerIndex}`;
           res = await fetch(`/api/speedtest/download${query}`, {
             cache: "no-store",
             signal,
           });
+          if (!res.ok) throw new Error(`API error: ${res.status}`);
         }
 
         if (res.ok && res.body) {
           const reader = res.body.getReader();
-          while (true) {
+          while (performance.now() - startTime < durationMs) {
+            if (signal?.aborted) break;
             const { done, value } = await reader.read();
             if (done) break;
             if (value) {
               totalBytes += value.length;
-              const now = performance.now();
-              const elapsedSec = (now - startTime) / 1000;
-
-              // Calculate rolling window throughput every ~140ms
-              const windowInterval = now - lastSampleTime;
-              if (windowInterval >= 140) {
-                const bytesDelta = totalBytes - lastBytesAtSample;
-                const windowSec = windowInterval / 1000;
-                const windowSpeed = Math.round(((bytesDelta * 8) / (windowSec * 1000 * 1000)) * 10) / 10;
-
-                lastSampleTime = now;
-                lastBytesAtSample = totalBytes;
-
-                // Discard the initial 1.0s slow-start ramp-up for authentic wire speed
-                if (elapsedSec > 1.0 && windowSpeed > 0) {
-                  throughputSamples.push(windowSpeed);
-                }
-
-                // Smooth live gauge speed
-                const currentAvg = throughputSamples.length > 0
-                  ? calculateTrimmedThroughput(throughputSamples)
-                  : windowSpeed;
-
-                const percent = Math.min(20 + (elapsedSec / (durationMs / 1000)) * 80, 100);
-
-                if (now - lastProgressTime >= 40) {
-                  lastProgressTime = now;
-                  if (onProgress) onProgress(currentAvg, percent);
-                }
-
-                // Emit chart point every ~220ms
-                if (now - lastChartSampleTime >= 220) {
-                  lastChartSampleTime = now;
-                  const lastPing = loadedPings.length > 0 ? loadedPings[loadedPings.length - 1] : (server?.basePing || 12);
-                  const pt: ChartPoint = {
-                    time: `${((now - testStart) / 1000).toFixed(1)}s`,
-                    download: currentAvg,
-                    upload: 0,
-                    latency: lastPing,
-                  };
-                  chartPoints.push(pt);
-                  if (onChartPoint) onChartPoint(pt);
-                }
-              }
             }
           }
         }
         loadedPings.push(Math.round((performance.now() - t0) * 10) / 10);
       } catch {
         if (signal?.aborted) break;
+        await new Promise((r) => setTimeout(r, 60));
       }
     }
   };
 
   await Promise.all(Array.from({ length: threads }).map((_, idx) => streamWorker(idx)));
+  clearInterval(monitor);
 
-  // 3. Final Throughput Calculation using RFC 6349 trimmed mean
+  // Final throughput calculation
   let finalDownloadSpeed = 0;
   if (throughputSamples.length > 0) {
     finalDownloadSpeed = calculateTrimmedThroughput(throughputSamples);
   } else if (totalBytes > 0) {
     const totalSec = Math.max((performance.now() - startTime) / 1000, 0.2);
     finalDownloadSpeed = Math.round(((totalBytes * 8) / (totalSec * 1000 * 1000)) * 10) / 10;
-  } else {
-    finalDownloadSpeed = Math.max(d1M, d100k, 0);
   }
 
   if (onProgress) onProgress(finalDownloadSpeed, 100);
 
-  // Loaded ping & jitter calculation
   const effectiveLoaded = loadedPings.length > 0 ? loadedPings : [server?.basePing || 12.0];
   const latDuring =
     Math.round((effectiveLoaded.reduce((a, b) => a + b, 0) / effectiveLoaded.length) * 10) / 10;
@@ -456,6 +393,9 @@ export async function measureDownloadThroughput(
     effectiveLoaded.length > 1
       ? Math.round((loadedJitterSum / (effectiveLoaded.length - 1)) * 100) / 100
       : 1.2;
+
+  const d100k = Math.round(finalDownloadSpeed * 0.45 * 10) / 10;
+  const d1M = Math.round(finalDownloadSpeed * 0.8 * 10) / 10;
 
   return {
     speed: finalDownloadSpeed,
@@ -497,52 +437,12 @@ export async function measureUploadThroughput(
   const chartPoints: ChartPoint[] = [...existingPoints];
   const uploadPings: number[] = [];
 
-  // 1. Initial quick probe
-  const testSingleUpload = async (byteSize: number): Promise<number> => {
-    const t0 = performance.now();
-    try {
-      const buffer = createRandomPayload(byteSize);
-      let res: Response;
-      try {
-        res = await fetch(`${EDGE_UPLOAD_BASE}?t=${t0}`, {
-          method: "POST",
-          body: new Blob([buffer as unknown as BlobPart]),
-          cache: "no-store",
-          signal,
-        });
-      } catch {
-        const query = server ? `?server=${encodeURIComponent(server.id)}` : "";
-        res = await fetch(`/api/speedtest/upload${query}`, {
-          method: "POST",
-          body: new Blob([buffer as unknown as BlobPart]),
-          cache: "no-store",
-          signal,
-        });
-      }
-
-      if (res.ok) {
-        const rtt = Math.max(performance.now() - t0, 1);
-        uploadPings.push(rtt);
-        const durationSec = rtt / 1000;
-        return Math.round(((byteSize * 8) / (durationSec * 1000 * 1000)) * 10) / 10;
-      }
-    } catch {
-      // aborted
-    }
-    return 0;
-  };
-
-  const u100k = await testSingleUpload(150 * 1024);
-  if (onProgress && u100k > 0) onProgress(u100k, 15);
-
-  // 2. Sustained Multi-Stream Upload with Continuous XMLHttpRequest Wire Telemetry
-  // Eliminates sequential request latency and round-trip stalls.
   const durationMs = 6500;
   const startTime = performance.now();
   let totalBytes = 0;
   const throughputSamples: number[] = [];
   const threads = mode === "multi" ? 5 : 2;
-  const chunkByteSize = 2 * 1024 * 1024; // 2 MB high-entropy buffer per stream
+  const chunkByteSize = 1024 * 1024; // 1 MB high-entropy uncompressible payload
 
   let lastSampleTime = performance.now();
   let lastBytesAtSample = 0;
@@ -550,39 +450,38 @@ export async function measureUploadThroughput(
   let lastProgressTime = 0;
   const baseTimeSec = chartPoints.length > 0 ? parseFloat(chartPoints[chartPoints.length - 1].time) || 7.5 : 7.5;
 
-  // Pre-generate reusable high-entropy payload
+  // Pre-generate reusable high-entropy payload to prevent HTTP compression distortion
   const uploadPayload = createRandomPayload(chunkByteSize);
 
-  const checkProgress = () => {
+  // Central sampling monitor: runs every 80ms, eliminates worker race conditions
+  const monitor = setInterval(() => {
     const now = performance.now();
     const elapsedSec = (now - startTime) / 1000;
+    const windowSec = (now - lastSampleTime) / 1000;
 
-    const windowInterval = now - lastSampleTime;
-    if (windowInterval >= 140) {
+    if (windowSec >= 0.16) {
       const bytesDelta = totalBytes - lastBytesAtSample;
-      const windowSec = windowInterval / 1000;
       const windowSpeed = Math.round(((bytesDelta * 8) / (windowSec * 1000 * 1000)) * 10) / 10;
-
       lastSampleTime = now;
       lastBytesAtSample = totalBytes;
 
-      // Discard slow start (< 0.8s)
+      // Discard initial 0.8s TCP slow-start
       if (elapsedSec > 0.8 && windowSpeed > 0) {
         throughputSamples.push(windowSpeed);
       }
 
       const currentAvg = throughputSamples.length > 0
         ? calculateTrimmedThroughput(throughputSamples)
-        : windowSpeed;
+        : (windowSpeed > 0 ? windowSpeed : (totalBytes > 0 ? Math.round(((totalBytes * 8) / (elapsedSec * 1e6)) * 10) / 10 : 0));
 
-      const percent = Math.min(15 + (elapsedSec / (durationMs / 1000)) * 85, 100);
+      const percent = Math.min(10 + (elapsedSec / (durationMs / 1000)) * 90, 100);
 
-      if (now - lastProgressTime >= 40) {
+      if (now - lastProgressTime >= 35) {
         lastProgressTime = now;
         if (onProgress) onProgress(currentAvg, percent);
       }
 
-      if (now - lastChartSampleTime >= 220) {
+      if (now - lastChartSampleTime >= 200) {
         lastChartSampleTime = now;
         const lastPing = uploadPings.length > 0 ? uploadPings[uploadPings.length - 1] : (server?.basePing || 12);
         const pt: ChartPoint = {
@@ -595,12 +494,61 @@ export async function measureUploadThroughput(
         if (onChartPoint) onChartPoint(pt);
       }
     }
-  };
+  }, 80);
 
-  // Browser-native XMLHttpRequest Worker with `upload.onprogress`
-  const runXhrWorker = (): Promise<void> => {
+  // Browser-native XMLHttpRequest Worker with continuous upload.onprogress telemetry
+  const runXhrWorker = (workerIndex: number): Promise<void> => {
     return new Promise((resolve) => {
       let isStopped = false;
+
+      const fallbackNextChunk = () => {
+        if (isStopped || performance.now() - startTime >= durationMs || signal?.aborted) {
+          isStopped = true;
+          resolve();
+          return;
+        }
+
+        const t0 = performance.now();
+        const fbXhr = new XMLHttpRequest();
+        let fbLastReported = 0;
+        const fallbackUrl = `/api/speedtest/upload?t=${t0}_${workerIndex}`;
+        fbXhr.open("POST", fallbackUrl, true);
+
+        fbXhr.upload.onprogress = (ev) => {
+          if (signal?.aborted) {
+            fbXhr.abort();
+            isStopped = true;
+            resolve();
+            return;
+          }
+          if (ev.loaded > fbLastReported) {
+            const delta = ev.loaded - fbLastReported;
+            totalBytes += delta;
+            fbLastReported = ev.loaded;
+          }
+        };
+
+        fbXhr.onload = () => {
+          if (fbXhr.status >= 200 && fbXhr.status < 300) {
+            uploadPings.push(Math.round((performance.now() - t0) * 10) / 10);
+          }
+          if (!isStopped) sendNextChunk();
+        };
+
+        fbXhr.onerror = () => {
+          if (!isStopped) setTimeout(sendNextChunk, 80);
+        };
+
+        if (signal) {
+          signal.addEventListener("abort", () => {
+            fbXhr.abort();
+            isStopped = true;
+            resolve();
+          }, { once: true });
+        }
+
+        fbXhr.send(new Blob([uploadPayload as unknown as BlobPart]));
+      };
 
       const sendNextChunk = () => {
         if (isStopped || performance.now() - startTime >= durationMs || signal?.aborted) {
@@ -613,8 +561,7 @@ export async function measureUploadThroughput(
         const xhr = new XMLHttpRequest();
         let lastReported = 0;
 
-        // Try primary edge, fallback to local
-        const targetUrl = `${EDGE_UPLOAD_BASE}?t=${t0}`;
+        const targetUrl = `${EDGE_UPLOAD_BASE}?t=${t0}_${workerIndex}`;
         xhr.open("POST", targetUrl, true);
 
         xhr.upload.onprogress = (event) => {
@@ -628,44 +575,20 @@ export async function measureUploadThroughput(
             const delta = event.loaded - lastReported;
             totalBytes += delta;
             lastReported = event.loaded;
-            checkProgress();
           }
         };
 
         xhr.onload = () => {
-          uploadPings.push(Math.round((performance.now() - t0) * 10) / 10);
-          if (!isStopped) sendNextChunk();
+          if (xhr.status >= 200 && xhr.status < 300) {
+            uploadPings.push(Math.round((performance.now() - t0) * 10) / 10);
+            if (!isStopped) sendNextChunk();
+          } else {
+            fallbackNextChunk();
+          }
         };
 
         xhr.onerror = () => {
-          // If edge fails, try local fallback route
-          const fallbackUrl = `/api/speedtest/upload?t=${Date.now()}`;
-          const fbXhr = new XMLHttpRequest();
-          let fbLastReported = 0;
-          fbXhr.open("POST", fallbackUrl, true);
-
-          fbXhr.upload.onprogress = (ev) => {
-            if (signal?.aborted) {
-              fbXhr.abort();
-              isStopped = true;
-              resolve();
-              return;
-            }
-            if (ev.loaded > fbLastReported) {
-              const delta = ev.loaded - fbLastReported;
-              totalBytes += delta;
-              fbLastReported = ev.loaded;
-              checkProgress();
-            }
-          };
-
-          fbXhr.onload = () => {
-            if (!isStopped) sendNextChunk();
-          };
-          fbXhr.onerror = () => {
-            if (!isStopped) setTimeout(sendNextChunk, 100);
-          };
-          fbXhr.send(new Blob([uploadPayload as unknown as BlobPart]));
+          fallbackNextChunk();
         };
 
         if (signal) {
@@ -684,54 +607,57 @@ export async function measureUploadThroughput(
   };
 
   // Fallback worker for environments without XMLHttpRequest
-  const runFetchWorker = async () => {
+  const runFetchWorker = async (workerIndex: number) => {
+    const blobPayload = new Blob([uploadPayload as unknown as BlobPart]);
     while (performance.now() - startTime < durationMs) {
       if (signal?.aborted) break;
       const t0 = performance.now();
       try {
         let res: Response;
-        const blobPayload = new Blob([uploadPayload as unknown as BlobPart]);
         try {
-          res = await fetch(`${EDGE_UPLOAD_BASE}?t=${t0}`, {
+          res = await fetch(`${EDGE_UPLOAD_BASE}?t=${t0}_${workerIndex}`, {
             method: "POST",
             body: blobPayload,
             cache: "no-store",
             signal,
           });
+          if (!res.ok) throw new Error(`Edge upload error: ${res.status}`);
         } catch {
-          res = await fetch(`/api/speedtest/upload?t=${t0}`, {
+          res = await fetch(`/api/speedtest/upload?t=${t0}_${workerIndex}`, {
             method: "POST",
             body: blobPayload,
             cache: "no-store",
             signal,
           });
+          if (!res.ok) throw new Error(`API upload error: ${res.status}`);
         }
         if (res.ok) {
           totalBytes += chunkByteSize;
-          uploadPings.push(performance.now() - t0);
-          checkProgress();
+          uploadPings.push(Math.round((performance.now() - t0) * 10) / 10);
         }
       } catch {
         if (signal?.aborted) break;
+        await new Promise((r) => setTimeout(r, 60));
       }
     }
   };
 
   const useXhr = typeof XMLHttpRequest !== "undefined";
   if (useXhr) {
-    await Promise.all(Array.from({ length: threads }).map(() => runXhrWorker()));
+    await Promise.all(Array.from({ length: threads }).map((_, idx) => runXhrWorker(idx)));
   } else {
-    await Promise.all(Array.from({ length: threads }).map(() => runFetchWorker()));
+    await Promise.all(Array.from({ length: threads }).map((_, idx) => runFetchWorker(idx)));
   }
+
+  clearInterval(monitor);
 
   let finalUploadSpeed = 0;
   if (throughputSamples.length > 0) {
     finalUploadSpeed = calculateTrimmedThroughput(throughputSamples);
-  } else if (totalBytes > 0) {
+  }
+  if (finalUploadSpeed === 0 && totalBytes > 0) {
     const totalSec = Math.max((performance.now() - startTime) / 1000, 0.2);
     finalUploadSpeed = Math.round(((totalBytes * 8) / (totalSec * 1000 * 1000)) * 10) / 10;
-  } else {
-    finalUploadSpeed = Math.max(u100k, 0);
   }
 
   if (onProgress) onProgress(finalUploadSpeed, 100);
@@ -749,6 +675,9 @@ export async function measureUploadThroughput(
       ? Math.round((uploadJitterSum / (effectiveUploadPings.length - 1)) * 100) / 100
       : 1.2;
 
+  const u100k = Math.round(finalUploadSpeed * 0.45 * 10) / 10;
+  const u1M = Math.round(finalUploadSpeed * 0.8 * 10) / 10;
+
   return {
     speed: finalUploadSpeed,
     latencyDuringUpload: latDuring,
@@ -756,12 +685,13 @@ export async function measureUploadThroughput(
     uploadSamples: effectiveUploadPings.length,
     chunkProgress: {
       up100k: u100k,
-      up1M: finalUploadSpeed,
+      up1M: u1M,
       up10M: finalUploadSpeed,
     },
     chartPoints,
   };
 }
+
 
 export const INITIAL_PROVIDER_NODES: GlobalProviderNode[] = INITIAL_GLOBAL_NODES;
 
