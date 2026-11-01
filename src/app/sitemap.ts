@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://speedtest.pingly.net";
+  const baseUrl = "https://pingly.ktexucoder.online";
   const now = new Date();
 
   return [

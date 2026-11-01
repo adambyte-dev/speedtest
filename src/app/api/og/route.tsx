@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
                   Pingly <span style={{ color: "#FB7185" }}>Speed Test</span>
                 </span>
                 <span style={{ fontSize: "14px", color: "rgba(255, 255, 255, 0.7)" }}>
-                  speedtest.pingly.net · Uji Kecepatan Akurat & Transparan
+                  pingly.ktexucoder.online · Uji Kecepatan Akurat & Transparan
                 </span>
               </div>
             </div>
@@ -234,7 +234,7 @@ export async function GET(request: NextRequest) {
                 Bagikan & Uji Kecepatan di:
               </span>
               <span style={{ fontSize: "15px", fontWeight: 800, color: "#FB7185" }}>
-                speedtest.pingly.net
+                pingly.ktexucoder.online
               </span>
             </div>
           </div>

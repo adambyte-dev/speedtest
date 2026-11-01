@@ -26,7 +26,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://speedtest.pingly.net"),
+  metadataBase: new URL("https://pingly.ktexucoder.online"),
   title: {
     default: "Pingly Speed Test — Uji Kecepatan Internet Akurat & Transparan",
     template: "%s | Pingly Speed Test",
@@ -75,14 +75,14 @@ export const metadata: Metadata = {
     telephone: false,
   },
   alternates: {
-    canonical: "https://speedtest.pingly.net",
+    canonical: "https://pingly.ktexucoder.online",
     languages: {
-      "id-ID": "https://speedtest.pingly.net/?lang=id",
-      "en-US": "https://speedtest.pingly.net/?lang=en",
-      "ja-JP": "https://speedtest.pingly.net/?lang=ja",
-      "zh-CN": "https://speedtest.pingly.net/?lang=zh",
-      "es-ES": "https://speedtest.pingly.net/?lang=es",
-      "ar-SA": "https://speedtest.pingly.net/?lang=ar",
+      "id-ID": "https://pingly.ktexucoder.online/?lang=id",
+      "en-US": "https://pingly.ktexucoder.online/?lang=en",
+      "ja-JP": "https://pingly.ktexucoder.online/?lang=ja",
+      "zh-CN": "https://pingly.ktexucoder.online/?lang=zh",
+      "es-ES": "https://pingly.ktexucoder.online/?lang=es",
+      "ar-SA": "https://pingly.ktexucoder.online/?lang=ar",
     },
   },
   icons: {
@@ -97,7 +97,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "id_ID",
     alternateLocale: ["en_US", "ja_JP", "zh_CN", "es_ES", "ar_SA"],
-    url: "https://speedtest.pingly.net",
+    url: "https://pingly.ktexucoder.online",
     siteName: "Pingly Speed Test",
     title: "Pingly Speed Test — Uji Kecepatan Internet Akurat & Transparan",
     description:
@@ -117,7 +117,7 @@ export const metadata: Metadata = {
     description:
       "Uji kecepatan internet unduh, unggah, dan latensi Anda secara real-time tanpa manipulasi matematika sintetis.",
     creator: "@adambyte_dev",
-    images: ["https://speedtest.pingly.net/api/og"],
+    images: ["https://pingly.ktexucoder.online/api/og"],
   },
   robots: {
     index: true,
@@ -144,9 +144,9 @@ const jsonLdSchemas = {
   "@graph": [
     {
       "@type": "WebApplication",
-      "@id": "https://speedtest.pingly.net/#webapp",
+      "@id": "https://pingly.ktexucoder.online/#webapp",
       name: "Pingly Speed Test",
-      url: "https://speedtest.pingly.net",
+      url: "https://pingly.ktexucoder.online",
       applicationCategory: "UtilitiesApplication",
       operatingSystem: "All",
       browserRequirements: "Requires modern JavaScript and WebSocket/Fetch API support",
@@ -176,26 +176,26 @@ const jsonLdSchemas = {
     },
     {
       "@type": "WebSite",
-      "@id": "https://speedtest.pingly.net/#website",
-      url: "https://speedtest.pingly.net",
+      "@id": "https://pingly.ktexucoder.online/#website",
+      url: "https://pingly.ktexucoder.online",
       name: "Pingly Speed Test",
       description: "Uji kecepatan internet akurat, transparan & real-time.",
       publisher: {
-        "@id": "https://speedtest.pingly.net/#organization",
+        "@id": "https://pingly.ktexucoder.online/#organization",
       },
       inLanguage: ["id-ID", "en-US", "ja-JP", "zh-CN", "es-ES", "ar-SA"],
     },
     {
       "@type": "Organization",
-      "@id": "https://speedtest.pingly.net/#organization",
+      "@id": "https://pingly.ktexucoder.online/#organization",
       name: "Pingly Technologies",
-      url: "https://speedtest.pingly.net",
-      logo: "https://speedtest.pingly.net/logo.png",
+      url: "https://pingly.ktexucoder.online",
+      logo: "https://pingly.ktexucoder.online/logo.png",
       sameAs: ["https://github.com/adambyte-dev"],
     },
     {
       "@type": "FAQPage",
-      "@id": "https://speedtest.pingly.net/#faq",
+      "@id": "https://pingly.ktexucoder.online/#faq",
       mainEntity: [
         {
           "@type": "Question",

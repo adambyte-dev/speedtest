@@ -46,7 +46,7 @@ export function ShareModal({
   const jitterVal = metrics.jitter !== null ? metrics.jitter.toFixed(1) : "1.0";
 
   // Build the shareable URL with parameters
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://speedtest.pingly.net";
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://pingly.ktexucoder.online";
   const shareUrl = `${origin}/?down=${downVal}&up=${upVal}&ping=${pingVal}&jitter=${jitterVal}&server=${encodeURIComponent(
     selectedServer.id
   )}`;

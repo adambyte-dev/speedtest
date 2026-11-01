@@ -26,7 +26,7 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
       },
     ],
-    sitemap: "https://speedtest.pingly.net/sitemap.xml",
-    host: "https://speedtest.pingly.net",
+    sitemap: "https://pingly.ktexucoder.online/sitemap.xml",
+    host: "https://pingly.ktexucoder.online",
   };
 }
