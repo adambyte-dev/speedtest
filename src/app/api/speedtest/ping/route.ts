@@ -81,6 +81,8 @@ export async function GET(request: Request) {
         "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
         Pragma: "no-cache",
         Expires: "0",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
       },
     }
   );
@@ -92,6 +94,18 @@ export async function HEAD() {
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
       "X-Response-Time": Date.now().toString(),
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+      "Access-Control-Allow-Headers": "*",
     },
   });
 }

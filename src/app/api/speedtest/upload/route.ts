@@ -42,6 +42,8 @@ export async function POST(request: Request) {
       {
         headers: {
           "Cache-Control": "no-store, no-cache, no-transform, must-revalidate",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
         },
       }
     );
@@ -52,7 +54,23 @@ export async function POST(request: Request) {
         error: "Upload stream aborted or failed",
         bytesReceived,
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
     );
   }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "*",
+    },
+  });
 }

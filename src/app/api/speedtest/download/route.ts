@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 
-// High-entropy 2 MB random binary pool to guarantee 100% UNCOMPRESSIBLE data
-// This ensures that Brotli, Gzip, or any CDN compression CANNOT shrink the payload,
-// giving 100% true, accurate physical wire-speed measurement.
-const POOL_SIZE = 2 * 1024 * 1024; // 2 MB
+// High-entropy 4 MB random binary pool to guarantee 100% UNCOMPRESSIBLE data
+// Pre-allocated at module initialization to avoid CPU and garbage collection overhead during streaming.
+const POOL_SIZE = 4 * 1024 * 1024; // 4 MB
 const RANDOM_POOL = crypto.randomBytes(POOL_SIZE);
-const BLOCK_SIZE = 64 * 1024; // 64 KB chunks
+const CHUNK_SIZE = 256 * 1024; // 256 KB chunks for high throughput streaming
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -23,34 +22,32 @@ export async function GET(request: Request) {
   } else {
     const parsed = parseInt(sizeParam, 10);
     if (!isNaN(parsed) && parsed > 0) {
-      totalBytes = Math.min(parsed, 50 * 1024 * 1024); // Cap at 50 MB
+      totalBytes = Math.min(parsed, 100 * 1024 * 1024); // Cap at 100 MB
     }
   }
 
   let bytesRemaining = totalBytes;
   let poolOffset = 0;
 
-  // Stream raw uncompressible bytes in 64 KB chunks
+  // Stream raw uncompressible bytes in 256 KB zero-copy chunks
   const stream = new ReadableStream({
     pull(controller) {
       if (bytesRemaining <= 0) {
         controller.close();
         return;
       }
-      const chunkSize = Math.min(bytesRemaining, BLOCK_SIZE);
-      // Slice rotating window from the high-entropy pool
+      const chunkSize = Math.min(bytesRemaining, CHUNK_SIZE);
       const endOffset = poolOffset + chunkSize;
-      let chunk: Buffer;
+
+      let chunk: Uint8Array;
       if (endOffset <= POOL_SIZE) {
         chunk = RANDOM_POOL.subarray(poolOffset, endOffset);
         poolOffset = endOffset % POOL_SIZE;
       } else {
-        // Wrap around pool
-        chunk = Buffer.concat([
-          RANDOM_POOL.subarray(poolOffset, POOL_SIZE),
-          RANDOM_POOL.subarray(0, endOffset % POOL_SIZE),
-        ]);
-        poolOffset = endOffset % POOL_SIZE;
+        // Pool boundary wrap-around without slow concat: wrap poolOffset to 0
+        poolOffset = 0;
+        chunk = RANDOM_POOL.subarray(0, chunkSize);
+        poolOffset = chunkSize;
       }
 
       controller.enqueue(chunk);
@@ -67,6 +64,19 @@ export async function GET(request: Request) {
       "Cache-Control": "no-store, no-cache, no-transform, must-revalidate, max-age=0",
       "Pragma": "no-cache",
       "Expires": "0",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    },
+  });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+      "Access-Control-Allow-Headers": "*",
     },
   });
 }
